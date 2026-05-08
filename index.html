@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispo Prompt Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f12;
+    --bg2: #13161b;
+    --bg3: #1a1e25;
+    --border: #252b35;
+    --border2: #2e3645;
+    --accent: #00e5a0;
+    --accent2: #00b87d;
+    --accent-glow: rgba(0,229,160,0.12);
+    --text: #e8edf5;
+    --text2: #8a95a8;
+    --text3: #566070;
+    --red: #ff4d6a;
+    --amber: #ffb444;
+    --blue: #4d9fff;
+    --purple: #a78bfa;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 14px; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+
+  /* LAYOUT */
+  .app { display: grid; grid-template-columns: 260px 1fr 320px; grid-template-rows: 56px 1fr; height: 100vh; }
+  .topbar { grid-column: 1/-1; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--bg2); gap: 16px; justify-content: space-between; }
+  .sidebar { background: var(--bg2); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+  .canvas-area { background: var(--bg); overflow: auto; position: relative; }
+  .props-panel { background: var(--bg2); border-left: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+
+  /* TOPBAR */
+  .logo { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .top-actions { display: flex; gap: 8px; }
+  .btn { font-family: var(--sans); font-size: 12px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border2); background: var(--bg3); color: var(--text2); transition: all .15s; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .btn:hover { border-color: var(--border2); color: var(--text); background: #22293400; }
+  .btn-accent { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  .btn-accent:hover { background: var(--accent2); border-color: var(--accent2); color: #000; }
+  .btn-sm { font-size: 11px; padding: 5px 10px; }
+  .btn-danger { border-color: rgba(255,77,106,.3); color: var(--red); }
+  .btn-danger:hover { background: rgba(255,77,106,.08); }
+
+  /* SIDEBAR */
+  .sidebar-section { padding: 16px 14px 8px; }
+  .sidebar-label { font-family: var(--mono); font-size: 10px; font-weight: 600; color: var(--text3); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; }
+  .node-palette { display: flex; flex-direction: column; gap: 5px; }
+  .palette-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg3); cursor: grab; font-size: 12px; font-weight: 500; color: var(--text2); transition: all .15s; user-select: none; }
+  .palette-item:hover { border-color: var(--border2); color: var(--text); transform: translateX(2px); }
+  .palette-item:active { cursor: grabbing; }
+  .palette-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .pd-trigger { background: var(--accent); }
+  .pd-message { background: var(--blue); }
+  .pd-condition { background: var(--amber); }
+  .pd-action { background: var(--purple); }
+  .pd-end { background: var(--text3); }
+
+  .sidebar-divider { height: 1px; background: var(--border); margin: 8px 0; }
+
+  .template-list { display: flex; flex-direction: column; gap: 4px; }
+  .template-item { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text2); transition: all .15s; border: 1px solid transparent; }
+  .template-item:hover { background: var(--bg3); border-color: var(--border); color: var(--text); }
+  .template-item-name { font-weight: 500; margin-bottom: 2px; }
+  .template-item-desc { font-size: 10px; color: var(--text3); }
+
+  /* CANVAS */
+  #canvas { position: relative; min-width: 100%; min-height: 100%; }
+  .canvas-grid { position: absolute; inset: 0; background-image: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 28px 28px; opacity: .4; pointer-events: none; }
+  .canvas-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; pointer-events: none; opacity: .3; }
+  .canvas-empty-icon { font-size: 40px; opacity: .5; }
+  .canvas-empty-text { font-family: var(--mono); font-size: 12px; color: var(--text3); }
+
+  /* NODES */
+  .flow-node { position: absolute; min-width: 185px; max-width: 220px; border-radius: 10px; border: 1px solid var(--border2); background: var(--bg3); cursor: pointer; user-select: none; transition: box-shadow .15s, border-color .15s; }
+  .flow-node:hover { border-color: var(--border2); box-shadow: 0 4px 24px rgba(0,0,0,.4); }
+  .flow-node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow), 0 4px 24px rgba(0,0,0,.4); }
+  .node-header { padding: 10px 12px 8px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
+  .node-type-badge { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .node-title { font-size: 12px; font-weight: 600; color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node-delete { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 4px; color: var(--text3); font-size: 12px; opacity: 0; transition: all .1s; cursor: pointer; }
+  .flow-node:hover .node-delete { opacity: 1; }
+  .node-delete:hover { background: rgba(255,77,106,.15); color: var(--red); }
+  .node-body { padding: 8px 12px 10px; font-size: 11px; color: var(--text2); line-height: 1.5; max-height: 60px; overflow: hidden; }
+  .node-body.empty { color: var(--text3); font-style: italic; }
+
+  /* PORTS */
+  .node-ports { padding: 0 12px 10px; display: flex; justify-content: center; gap: 20px; position: relative; }
+  .port { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--border2); background: var(--bg); cursor: crosshair; position: relative; transition: all .15s; flex-shrink: 0; }
+  .port:hover { transform: scale(1.3); }
+  .port.port-yes { border-color: var(--accent); background: var(--accent-glow); }
+  .port.port-yes:hover { background: var(--accent); }
+  .port.port-no { border-color: rgba(255,77,106,.5); background: rgba(255,77,106,.08); }
+  .port.port-no:hover { background: var(--red); }
+  .port.port-out { border-color: var(--border2); }
+  .port.port-out:hover { border-color: var(--accent); background: var(--accent-glow); }
+  .port-label { position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--text3); white-space: nowrap; font-family: var(--mono); }
+
+  /* SVG LINES */
+  #svg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .conn-path { fill: none; stroke: var(--border2); stroke-width: 1.5; }
+  .conn-path.yes { stroke: var(--accent); opacity: .6; }
+  .conn-path.no { stroke: var(--red); opacity: .6; }
+  .conn-path.dragging { stroke: var(--accent); stroke-dasharray: 6 3; opacity: .8; }
+
+  /* PROPS PANEL */
+  .props-header { padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
+  .props-title { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: .08em; text-transform: uppercase; }
+  .props-body { padding: 14px 16px; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+  .props-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 40px 16px; }
+  .props-empty-text { font-size: 12px; color: var(--text3); text-align: center; line-height: 1.6; }
+
+  .field-group { display: flex; flex-direction: column; gap: 5px; }
+  .field-label { font-size: 11px; font-weight: 500; color: var(--text3); font-family: var(--mono); letter-spacing: .04em; }
+  .field-input, .field-select, .field-textarea { width: 100%; background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; padding: 8px 10px; color: var(--text); font-family: var(--sans); font-size: 12px; outline: none; transition: border-color .15s; resize: vertical; }
+  .field-textarea { min-height: 80px; line-height: 1.5; }
+  .field-input:focus, .field-textarea:focus, .field-select:focus { border-color: var(--accent); }
+  .field-select option { background: var(--bg2); }
+  .field-hint { font-size: 10px; color: var(--text3); line-height: 1.4; }
+
+  /* OUTPUT MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 12px; width: 100%; max-width: 760px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; transform: translateY(10px); transition: transform .2s; }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-header { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); }
+  .modal-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  .prompt-output { width: 100%; min-height: 400px; background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; padding: 16px; color: var(--text); font-family: var(--mono); font-size: 11px; line-height: 1.7; outline: none; resize: vertical; }
+  .modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+  .copy-confirm { font-size: 11px; color: var(--accent); font-family: var(--mono); opacity: 0; transition: opacity .3s; }
+  .copy-confirm.show { opacity: 1; }
+
+  /* PERSONALITY HEADER in props */
+  .personality-config { display: flex; flex-direction: column; gap: 12px; }
+  .config-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  /* node colors */
+  .nc-trigger { background: var(--accent); }
+  .nc-message { background: var(--blue); }
+  .nc-condition { background: var(--amber); }
+  .nc-action { background: var(--purple); }
+  .nc-end { background: var(--text3); }
+
+  /* scrollbars */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+  /* Connecting hint */
+  .connecting-hint { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--bg3); border: 1px solid var(--accent); border-radius: 20px; padding: 7px 16px; font-size: 11px; color: var(--accent); font-family: var(--mono); pointer-events: none; opacity: 0; transition: opacity .2s; z-index: 50; }
+  .connecting-hint.show { opacity: 1; }
+
+  /* stats row */
+  .stats-row { display: flex; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat-val { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--accent); }
+  .stat-lbl { font-size: 10px; color: var(--text3); }
+
+  /* section tabs */
+  .section-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .section-tab { flex: 1; padding: 10px; font-size: 11px; font-weight: 500; text-align: center; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; transition: all .15s; }
+  .section-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo"><span class="logo-dot"></span> DISPO PROMPT BUILDER</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:11px;color:var(--text3);font-family:var(--mono)" id="node-count-top">0 nodes · 0 connections</span>
+    </div>
+    <div class="top-actions">
+      <button class="btn btn-sm" onclick="clearCanvas()">⟳ Clear</button>
+      <button class="btn btn-sm" onclick="loadTemplate('basic')">Load Example</button>
+      <button class="btn btn-accent btn-sm" onclick="openOutput()">⚡ Generate Prompt</button>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Node Types</div>
+      <div class="node-palette">
+        <div class="palette-item" draggable="true" data-type="trigger"><span class="palette-dot pd-trigger"></span>Trigger</div>
+        <div class="palette-item" draggable="true" data-type="message"><span class="palette-dot pd-message"></span>Bot Message</div>
+        <div class="palette-item" draggable="true" data-type="condition"><span class="palette-dot pd-condition"></span>Condition / Check</div>
+        <div class="palette-item" draggable="true" data-type="action"><span class="palette-dot pd-action"></span>Action / Tool</div>
+        <div class="palette-item" draggable="true" data-type="end"><span class="palette-dot pd-end"></span>End / Label</div>
+      </div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Templates</div>
+      <div class="template-list">
+        <div class="template-item" onclick="loadTemplate('basic')">
+          <div class="template-item-name">Buyer Agents Flow</div>
+          <div class="template-item-desc">Novation · Vacant · Not Listed</div>
+        </div>
+        <div class="template-item" onclick="loadTemplate('nda')">
+          <div class="template-item-name">NDA Flow</div>
+          <div class="template-item-desc">Occupied · BoldSign required</div>
+        </div>
+        <div class="template-item" onclick="loadTemplate('objection')">
+          <div class="template-item-name">Price Objection</div>
+          <div class="template-item-desc">Soft offer · Counter flow</div>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" style="flex:1">
+      <div class="sidebar-label">Personality Config</div>
+      <div class="personality-config">
+        <div class="field-group">
+          <label class="field-label">Deal Type</label>
+          <select class="field-select" id="cfg-deal">
+            <option>NOVATION</option>
+            <option>DISPO</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Buyer Type</label>
+          <select class="field-select" id="cfg-buyer">
+            <option>Buyers Agents</option>
+            <option>LLC / Investors</option>
+            <option>InvestorBase</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Occupancy</label>
+          <select class="field-select" id="cfg-occ">
+            <option>Vacant</option>
+            <option>Occupied</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Listing Status</label>
+          <select class="field-select" id="cfg-listing">
+            <option>Not Listed</option>
+            <option>Listed</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">State Compliance</label>
+          <select class="field-select" id="cfg-state">
+            <option value="">Standard (FL)</option>
+            <option value="ncsc">NC/SC (stricter)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div class="canvas-area" id="canvas-area">
+    <div class="canvas-grid"></div>
+    <div id="canvas">
+      <div class="canvas-empty" id="canvas-empty">
+        <div class="canvas-empty-icon">⬡</div>
+        <div class="canvas-empty-text">Drag nodes here to start building your flow</div>
+      </div>
+      <svg id="svg-layer">
+        <defs>
+          <marker id="arr-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M2 2L8 5L2 8" fill="none" stroke="#2e3645" stroke-width="1.5" stroke-linecap="round"/>
+          </marker>
+          <marker id="arr-yes" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M2 2L8 5L2 8" fill="none" stroke="#00e5a0" stroke-width="1.5" stroke-linecap="round"/>
+          </marker>
+          <marker id="arr-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M2 2L8 5L2 8" fill="none" stroke="#ff4d6a" stroke-width="1.5" stroke-linecap="round"/>
+          </marker>
+          <marker id="arr-drag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M2 2L8 5L2 8" fill="none" stroke="#00e5a0" stroke-width="1.5" stroke-linecap="round"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <!-- PROPS PANEL -->
+  <div class="props-panel">
+    <div class="props-header">
+      <div class="props-title">Node Properties</div>
+    </div>
+    <div id="props-body">
+      <div class="props-empty">
+        <div style="font-size:28px;opacity:.3">◈</div>
+        <div class="props-empty-text">Click any node to edit its properties</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="connecting-hint" id="conn-hint">Click a destination node to connect</div>
+
+<!-- OUTPUT MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">⚡ GENERATED PROMPT</div>
+      <button class="btn btn-sm" onclick="closeModal()">✕ Close</button>
+    </div>
+    <div class="modal-body">
+      <textarea class="prompt-output" id="prompt-out" readonly></textarea>
+    </div>
+    <div class="modal-footer">
+      <span class="copy-confirm" id="copy-confirm">✓ Copied to clipboard</span>
+      <button class="btn btn-sm" onclick="closeModal()">Close</button>
+      <button class="btn btn-accent btn-sm" onclick="copyPrompt()">⎘ Copy Prompt</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let nodes = [];
+let connections = [];
+let selectedId = null;
+let uid = 0;
+let draggingNode = null, dragOffset = {x:0,y:0};
+let connectingFrom = null; // {id, branch}
+let tempPath = null;
+
+const TYPES = {
+  trigger:   { label:'Trigger',        color:'var(--accent)',  cls:'nc-trigger',   ports:['out'] },
+  message:   { label:'Bot Message',    color:'var(--blue)',    cls:'nc-message',   ports:['out'] },
+  condition: { label:'Condition',      color:'var(--amber)',   cls:'nc-condition', ports:['yes','no'] },
+  action:    { label:'Action / Tool',  color:'var(--purple)',  cls:'nc-action',    ports:['out'] },
+  end:       { label:'End / Label',    color:'var(--text3)',   cls:'nc-end',       ports:[] },
+};
+
+// ─── NODE CREATION ────────────────────────────────────────────────────────────
+function makeNode(type, x, y, data={}) {
+  const id = 'n'+(++uid);
+  const node = {
+    id, type, x, y,
+    title: data.title || TYPES[type].label,
+    text: data.text || '',
+    condition: data.condition || '',
+    label: data.label || '',
+    workflow: data.workflow || '',
+    tool: data.tool || '',
+  };
+  nodes.push(node);
+  renderNode(node);
+  updateStats();
+  checkEmpty();
+  return node;
+}
+
+function renderNode(node) {
+  let el = document.getElementById(node.id);
+  const isNew = !el;
+  if (isNew) {
+    el = document.createElement('div');
+    el.id = node.id;
+    el.className = 'flow-node';
+    el.addEventListener('mousedown', onNodeMousedown);
+    el.addEventListener('click', onNodeClick);
+    document.getElementById('canvas').appendChild(el);
+  }
+  el.style.left = node.x + 'px';
+  el.style.top = node.y + 'px';
+  const t = TYPES[node.type];
+  const bodyText = node.type==='condition' ? (node.condition||'') : (node.text||'');
+  const meta = [node.label, node.workflow, node.tool].filter(Boolean).join(' · ');
+
+  let portsHtml = '';
+  if (node.type==='condition') {
+    portsHtml = `<div class="node-ports" style="justify-content:space-between">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div class="port port-yes" data-nid="${node.id}" data-branch="yes"></div>
+        <span style="font-size:9px;color:var(--accent);font-family:var(--mono)">yes</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div class="port port-no" data-nid="${node.id}" data-branch="no"></div>
+        <span style="font-size:9px;color:var(--red);font-family:var(--mono)">no</span>
+      </div>
+    </div>`;
+  } else if (t.ports.includes('out')) {
+    portsHtml = `<div class="node-ports"><div class="port port-out" data-nid="${node.id}" data-branch="out"></div></div>`;
+  }
+
+  el.innerHTML = `
+    <div class="node-header">
+      <span class="node-type-badge ${t.cls}"></span>
+      <span class="node-title">${esc(node.title)}</span>
+      <span class="node-delete" onclick="deleteNode(event,'${node.id}')">✕</span>
+    </div>
+    <div class="node-body ${bodyText?'':'empty'}">${bodyText ? esc(bodyText).substring(0,90)+(bodyText.length>90?'…':'') : 'No content yet...'}</div>
+    ${meta ? `<div style="padding:0 12px 8px;font-size:10px;color:var(--text3);font-family:var(--mono)">${esc(meta)}</div>` : ''}
+    ${portsHtml}
+  `;
+  el.querySelectorAll('.port').forEach(p => p.addEventListener('mousedown', onPortMousedown));
+  el.classList.toggle('selected', node.id===selectedId);
+}
+
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ─── NODE EVENTS ──────────────────────────────────────────────────────────────
+function onNodeMousedown(e) {
+  if (e.target.classList.contains('port') || e.target.classList.contains('node-delete')) return;
+  draggingNode = e.currentTarget.id;
+  const node = nodes.find(n=>n.id===draggingNode);
+  const rect = e.currentTarget.getBoundingClientRect();
+  dragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  e.preventDefault();
+}
+
+function onNodeClick(e) {
+  if (e.target.classList.contains('port') || e.target.classList.contains('node-delete')) return;
+  if (connectingFrom) {
+    // complete connection
+    const targetId = e.currentTarget.id;
+    if (targetId !== connectingFrom.id) {
+      const exists = connections.find(c=>c.from===connectingFrom.id&&c.branch===connectingFrom.branch&&c.to===targetId);
+      if (!exists) connections.push({from:connectingFrom.id, branch:connectingFrom.branch, to:targetId});
+      updateStats();
+      redrawLines();
+    }
+    connectingFrom = null;
+    if (tempPath) { tempPath.remove(); tempPath=null; }
+    document.getElementById('conn-hint').classList.remove('show');
+    return;
+  }
+  selectNode(e.currentTarget.id);
+}
+
+function onPortMousedown(e) {
+  e.stopPropagation();
+  connectingFrom = { id: e.currentTarget.dataset.nid, branch: e.currentTarget.dataset.branch };
+  document.getElementById('conn-hint').classList.add('show');
+  e.preventDefault();
+}
+
+function deleteNode(e, id) {
+  e.stopPropagation();
+  nodes = nodes.filter(n=>n.id!==id);
+  connections = connections.filter(c=>c.from!==id && c.to!==id);
+  document.getElementById(id)?.remove();
+  if (selectedId===id) { selectedId=null; showEmptyProps(); }
+  updateStats(); redrawLines(); checkEmpty();
+}
+
+function selectNode(id) {
+  selectedId = id;
+  nodes.forEach(n => document.getElementById(n.id)?.classList.toggle('selected', n.id===id));
+  renderProps();
+}
+
+// ─── MOUSE MOVE / UP ──────────────────────────────────────────────────────────
+document.addEventListener('mousemove', e => {
+  if (draggingNode) {
+    const node = nodes.find(n=>n.id===draggingNode);
+    const area = document.getElementById('canvas-area').getBoundingClientRect();
+    node.x = Math.max(0, e.clientX - area.left - dragOffset.x + document.getElementById('canvas-area').scrollLeft);
+    node.y = Math.max(0, e.clientY - area.top - dragOffset.y + document.getElementById('canvas-area').scrollTop);
+    const el = document.getElementById(draggingNode);
+    if(el){el.style.left=node.x+'px';el.style.top=node.y+'px';}
+    redrawLines();
+  }
+  if (connectingFrom) drawTempLine(e);
+});
+
+document.addEventListener('mouseup', e => {
+  if (draggingNode) draggingNode = null;
+  // if mouseup on empty space while connecting, cancel
+  if (connectingFrom && !e.target.closest('.flow-node')) {
+    connectingFrom = null;
+    if (tempPath) { tempPath.remove(); tempPath=null; }
+    document.getElementById('conn-hint').classList.remove('show');
+  }
+});
+
+function drawTempLine(e) {
+  const area = document.getElementById('canvas-area');
+  const wr = area.getBoundingClientRect();
+  const fromEl = document.getElementById(connectingFrom.id);
+  if (!fromEl) return;
+  const fr = fromEl.getBoundingClientRect();
+  let x1;
+  if (connectingFrom.branch==='yes') x1 = fr.left - wr.left + fr.width*0.25 + area.scrollLeft;
+  else if (connectingFrom.branch==='no') x1 = fr.left - wr.left + fr.width*0.75 + area.scrollLeft;
+  else x1 = fr.left - wr.left + fr.width/2 + area.scrollLeft;
+  const y1 = fr.bottom - wr.top + area.scrollTop;
+  const x2 = e.clientX - wr.left + area.scrollLeft;
+  const y2 = e.clientY - wr.top + area.scrollTop;
+  const svg = document.getElementById('svg-layer');
+  if (!tempPath) {
+    tempPath = document.createElementNS('http://www.w3.org/2000/svg','path');
+    tempPath.setAttribute('class','conn-path dragging');
+    tempPath.setAttribute('marker-end','url(#arr-drag)');
+    svg.appendChild(tempPath);
+  }
+  tempPath.setAttribute('d', bezier(x1,y1,x2,y2));
+}
+
+function bezier(x1,y1,x2,y2) {
+  const dy = Math.max(Math.abs(y2-y1)*0.5, 40);
+  return `M${x1},${y1} C${x1},${y1+dy} ${x2},${y2-dy} ${x2},${y2}`;
+}
+
+// ─── LINES ────────────────────────────────────────────────────────────────────
+function redrawLines() {
+  const svg = document.getElementById('svg-layer');
+  svg.querySelectorAll('.conn-path:not(.dragging)').forEach(p=>p.remove());
+  const area = document.getElementById('canvas-area');
+  const wr = area.getBoundingClientRect();
+  connections.forEach(conn => {
+    const fromEl = document.getElementById(conn.from);
+    const toEl = document.getElementById(conn.to);
+    if (!fromEl||!toEl) return;
+    const fr = fromEl.getBoundingClientRect();
+    const tr = toEl.getBoundingClientRect();
+    let x1;
+    if (conn.branch==='yes') x1 = fr.left - wr.left + fr.width*0.25 + area.scrollLeft;
+    else if (conn.branch==='no') x1 = fr.left - wr.left + fr.width*0.75 + area.scrollLeft;
+    else x1 = fr.left - wr.left + fr.width/2 + area.scrollLeft;
+    const y1 = fr.bottom - wr.top + area.scrollTop;
+    const x2 = tr.left - wr.left + tr.width/2 + area.scrollLeft;
+    const y2 = tr.top - wr.top + area.scrollTop;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    const cls = conn.branch==='yes'?'yes':conn.branch==='no'?'no':'';
+    path.setAttribute('class','conn-path'+(cls?' '+cls:''));
+    path.setAttribute('d', bezier(x1,y1,x2,y2));
+    const mk = conn.branch==='yes'?'arr-yes':conn.branch==='no'?'arr-no':'arr-neutral';
+    path.setAttribute('marker-end',`url(#${mk})`);
+    svg.insertBefore(path, svg.firstChild);
+  });
+}
+
+// ─── DRAG FROM PALETTE ────────────────────────────────────────────────────────
+document.querySelectorAll('.palette-item').forEach(item => {
+  item.addEventListener('dragstart', e => e.dataTransfer.setData('type', item.dataset.type));
+});
+document.getElementById('canvas-area').addEventListener('dragover', e => e.preventDefault());
+document.getElementById('canvas-area').addEventListener('drop', e => {
+  e.preventDefault();
+  const type = e.dataTransfer.getData('type');
+  if (!type) return;
+  const area = document.getElementById('canvas-area');
+  const wr = area.getBoundingClientRect();
+  makeNode(type, e.clientX - wr.left - 90 + area.scrollLeft, e.clientY - wr.top - 20 + area.scrollTop);
+});
+
+// ─── PROPS PANEL ──────────────────────────────────────────────────────────────
+function showEmptyProps() {
+  document.getElementById('props-body').innerHTML = `<div class="props-empty"><div style="font-size:28px;opacity:.3">◈</div><div class="props-empty-text">Click any node to edit its properties</div></div>`;
+}
+
+function renderProps() {
+  const node = nodes.find(n=>n.id===selectedId);
+  if (!node) { showEmptyProps(); return; }
+  const t = TYPES[node.type];
+  let html = `<div class="props-body">`;
+  html += `<div class="field-group"><label class="field-label">Title</label><input class="field-input" id="p-title" value="${esc(node.title)}" oninput="updateField('title',this.value)"></div>`;
+
+  if (node.type==='message') {
+    html += `<div class="field-group"><label class="field-label">Message Text <span style="color:var(--text3);font-weight:400">(sent to buyer)</span></label><textarea class="field-textarea" id="p-text" oninput="updateField('text',this.value)" placeholder="What the bot says...">${esc(node.text)}</textarea><div class="field-hint">Keep under 160 chars when possible. Max 305 chars.</div></div>`;
+  }
+  if (node.type==='condition') {
+    html += `<div class="field-group"><label class="field-label">Condition / Check</label><textarea class="field-textarea" id="p-cond" oninput="updateField('condition',this.value)" placeholder="e.g. Buyer says they want to see the property">${esc(node.condition)}</textarea><div class="field-hint">Green port = YES/True. Red port = NO/False.</div></div>`;
+  }
+  if (node.type==='action') {
+    html += `<div class="field-group"><label class="field-label">Action Description</label><textarea class="field-textarea" id="p-text" oninput="updateField('text',this.value)" placeholder="e.g. Use create_buyer_lead tool">${esc(node.text)}</textarea></div>`;
+    html += `<div class="field-group"><label class="field-label">Tool Call</label><select class="field-select" onchange="updateField('tool',this.value)">
+      <option value="" ${!node.tool?'selected':''}>None</option>
+      <option value="update_label" ${node.tool==='update_label'?'selected':''}>update_label</option>
+      <option value="set_workflow" ${node.tool==='set_workflow'?'selected':''}>set_workflow</option>
+      <option value="create_buyer_lead" ${node.tool==='create_buyer_lead'?'selected':''}>create_buyer_lead</option>
+      <option value="schedule_walkthrough" ${node.tool==='schedule_walkthrough'?'selected':''}>schedule_walkthrough</option>
+      <option value="add_to_podio" ${node.tool==='add_to_podio'?'selected':''}>add_to_podio</option>
+      <option value="no_response" ${node.tool==='no_response'?'selected':''}>no_response</option>
+      <option value="get_lockbox_code" ${node.tool==='get_lockbox_code'?'selected':''}>get_lockbox_code</option>
+    </select></div>`;
+  }
+  if (node.type==='trigger') {
+    html += `<div class="field-group"><label class="field-label">Trigger Condition</label><textarea class="field-textarea" id="p-text" oninput="updateField('text',this.value)" placeholder="e.g. Buyer sends initial reply, Inbound SMS from blast">${esc(node.text)}</textarea></div>`;
+  }
+  if (node.type==='end') {
+    html += `<div class="field-group"><label class="field-label">Notes</label><textarea class="field-textarea" id="p-text" oninput="updateField('text',this.value)" placeholder="e.g. Flow complete, awaiting walkthrough confirmation">${esc(node.text)}</textarea></div>`;
+  }
+
+  // Label & Workflow for all nodes
+  html += `<div class="field-group"><label class="field-label">Apply Label</label><select class="field-select" onchange="updateField('label',this.value)">
+    <option value="" ${!node.label?'selected':''}>No label change</option>
+    <option value="Cold" ${node.label==='Cold'?'selected':''}>Cold</option>
+    <option value="Wants Info - Needs Sent" ${node.label==='Wants Info - Needs Sent'?'selected':''}>Wants Info - Needs Sent</option>
+    <option value="Sent Info - Follow Up" ${node.label==='Sent Info - Follow Up'?'selected':''}>Sent Info - Follow Up</option>
+    <option value="Likes Info - Follow Up" ${node.label==='Likes Info - Follow Up'?'selected':''}>Likes Info - Follow Up</option>
+    <option value="Needs Walkthrough Appt" ${node.label==='Needs Walkthrough Appt'?'selected':''}>Needs Walkthrough Appt</option>
+    <option value="Appt Confirmed - FU" ${node.label==='Appt Confirmed - FU'?'selected':''}>Appt Confirmed - FU</option>
+    <option value="WT Success - FU On Offer" ${node.label==='WT Success - FU On Offer'?'selected':''}>WT Success - FU On Offer</option>
+    <option value="Offer Received - Nurture" ${node.label==='Offer Received - Nurture'?'selected':''}>Offer Received - Nurture</option>
+    <option value="Soft Offer" ${node.label==='Soft Offer'?'selected':''}>Soft Offer</option>
+    <option value="Nurture" ${node.label==='Nurture'?'selected':''}>Nurture</option>
+    <option value="Not Interested" ${node.label==='Not Interested'?'selected':''}>Not Interested</option>
+    <option value="Disqualified" ${node.label==='Disqualified'?'selected':''}>Disqualified</option>
+    <option value="DNC" ${node.label==='DNC'?'selected':''}>DNC</option>
+    <option value="Wrong Number" ${node.label==='Wrong Number'?'selected':''}>Wrong Number</option>
+    <option value="Manual" ${node.label==='Manual'?'selected':''}>Manual</option>
+  </select></div>`;
+
+  html += `<div class="field-group"><label class="field-label">Set Workflow</label><select class="field-select" onchange="updateField('workflow',this.value)">
+    <option value="" ${!node.workflow?'selected':''}>No workflow change</option>
+    <option value="General Response - No Details Sent" ${node.workflow==='General Response - No Details Sent'?'selected':''}>General Response - No Details Sent</option>
+    <option value="Asked For Details - Nurture" ${node.workflow==='Asked For Details - Nurture'?'selected':''}>Asked For Details - Nurture</option>
+    <option value="Asked For Details - Nurture #2" ${node.workflow==='Asked For Details - Nurture #2'?'selected':''}>Asked For Details - Nurture #2</option>
+    <option value="No Clients (Now - Nurture)" ${node.workflow==='No Clients (Now - Nurture)'?'selected':''}>No Clients (Now - Nurture)</option>
+    <option value="Wants/Needs Walkthrough - Nurture" ${node.workflow==='Wants/Needs Walkthrough - Nurture'?'selected':''}>Wants/Needs Walkthrough - Nurture</option>
+  </select></div>`;
+
+  html += `<button class="btn btn-danger btn-sm" style="margin-top:4px" onclick="deleteNode({stopPropagation:()=>{}}, '${node.id}')">✕ Delete Node</button>`;
+  html += `</div>`;
+  document.getElementById('props-body').innerHTML = html;
+}
+
+function updateField(key, val) {
+  const node = nodes.find(n=>n.id===selectedId);
+  if (!node) return;
+  node[key] = val;
+  renderNode(node);
+}
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('node-count-top').textContent = `${nodes.length} node${nodes.length!==1?'s':''} · ${connections.length} connection${connections.length!==1?'s':''}`;
+}
+
+function checkEmpty() {
+  document.getElementById('canvas-empty').style.display = nodes.length===0 ? 'flex' : 'none';
+}
+
+// ─── CLEAR ────────────────────────────────────────────────────────────────────
+function clearCanvas() {
+  if (nodes.length && !confirm('Clear the canvas?')) return;
+  nodes=[]; connections=[];
+  document.querySelectorAll('.flow-node').forEach(el=>el.remove());
+  document.getElementById('svg-layer').querySelectorAll('.conn-path:not(.dragging)').forEach(p=>p.remove());
+  selectedId=null; showEmptyProps(); updateStats(); checkEmpty();
+}
+
+// ─── TEMPLATES ────────────────────────────────────────────────────────────────
+function loadTemplate(name) {
+  clearCanvas();
+  setTimeout(()=>{
+    if (name==='basic') loadBasicTemplate();
+    else if (name==='nda') loadNDATemplate();
+    else if (name==='objection') loadObjectionTemplate();
+    setTimeout(redrawLines, 80);
+  }, 50);
+}
+
+function loadBasicTemplate() {
+  const n1 = makeNode('trigger', 40, 30, { title:'Inbound SMS', text:'Buyer replies to property blast. Could be interest, question, or confusion.' });
+  const n2 = makeNode('message', 40, 160, { title:'Intro / Who Are You', text:'This is <Dispo Agent> with 360 Home Offers. We have a property in <Property City>. Would any of your clients be interested?', label:'Cold', workflow:'General Response - No Details Sent' });
+  const n3 = makeNode('condition', 40, 310, { title:'Buyer Interested?', condition:'Buyer says Yes, Details, Sure, Send it, or any short affirmative response' });
+  const n4 = makeNode('message', 40, 460, { title:'Send Property Details', text:'Address: <Owned Property>\nStarting Price: $<Asking Price>\nBed/Bath/SqFt/Year\nPhotos: <Link>', label:'Sent Info - Follow Up', workflow:'Asked For Details - Nurture' });
+  const n5 = makeNode('end', 230, 460, { title:'Not Interested', text:'Label and use no_response tool', label:'Not Interested' });
+  const n6 = makeNode('condition', 40, 590, { title:'Wants to See It?', condition:'Buyer explicitly asks to visit, tour, walk through, or schedule a showing' });
+  const n7 = makeNode('action', 40, 730, { title:'Schedule Walkthrough', text:'Ask for day/time. Get lockbox code. Create buyer in Podio. Schedule walkthrough.', label:'Needs Walkthrough Appt', workflow:'Wants/Needs Walkthrough - Nurture', tool:'create_buyer_lead' });
+  const n8 = makeNode('action', 260, 730, { title:'Nurture / Follow Up', text:'Set workflow and let automation handle follow up.', workflow:'Asked For Details - Nurture', tool:'no_response' });
+  connections.push(
+    {from:n1.id,branch:'out',to:n2.id},
+    {from:n2.id,branch:'out',to:n3.id},
+    {from:n3.id,branch:'yes',to:n4.id},
+    {from:n3.id,branch:'no',to:n5.id},
+    {from:n4.id,branch:'out',to:n6.id},
+    {from:n6.id,branch:'yes',to:n7.id},
+    {from:n6.id,branch:'no',to:n8.id},
+  );
+  updateStats();
+}
+
+function loadNDATemplate() {
+  const n1 = makeNode('trigger', 40, 30, { title:'Buyer Shows Interest', text:'After property details sent, buyer confirms interest' });
+  const n2 = makeNode('action', 40, 150, { title:'Request Email for NDA', text:'Ask for email to send BoldSign NDA link', label:'Needs Walkthrough Appt' });
+  const n3 = makeNode('condition', 40, 280, { title:'Email Provided?', condition:'Buyer provides their email address' });
+  const n4 = makeNode('action', 40, 410, { title:'Send NDA via BoldSign', text:'Send BoldSign NDA link to buyer email', tool:'no_response' });
+  const n5 = makeNode('condition', 40, 530, { title:'NDA Signed?', condition:'BoldSign confirms document has been signed' });
+  const n6 = makeNode('message', 40, 650, { title:'Send Address + Schedule', text:'Send property address and schedule walkthrough', label:'Appt Confirmed - FU', tool:'schedule_walkthrough' });
+  const n7 = makeNode('end', 260, 530, { title:'Waiting on Signature', text:'Set workflow and wait. Follow up if no response.', label:'Manual' });
+  connections.push(
+    {from:n1.id,branch:'out',to:n2.id},
+    {from:n2.id,branch:'out',to:n3.id},
+    {from:n3.id,branch:'yes',to:n4.id},
+    {from:n4.id,branch:'out',to:n5.id},
+    {from:n5.id,branch:'yes',to:n6.id},
+    {from:n5.id,branch:'no',to:n7.id},
+  );
+  updateStats();
+}
+
+function loadObjectionTemplate() {
+  const n1 = makeNode('trigger', 40, 30, { title:'Price Objection', text:'Buyer says price too high, not enough spread, not enough profit' });
+  const n2 = makeNode('message', 40, 155, { title:'Ask for Counter', text:'Got it. We are open to offers, what number makes sense for your client?' });
+  const n3 = makeNode('condition', 40, 290, { title:'Offer Provided?', condition:'Buyer gives a specific number as counter offer' });
+  const n4 = makeNode('condition', 40, 430, { title:'Reasonable Offer?', condition:'Offer is within roughly 20% of asking price (not a lowball)' });
+  const n5 = makeNode('end', 40, 570, { title:'Soft Offer → No Reply', text:'Label Soft Offer, DO NOT reply back. Dispo agents handle.', label:'Soft Offer', tool:'no_response' });
+  const n6 = makeNode('end', 260, 570, { title:'Lowball → Manual', text:'Label Manual, DO NOT reply back. Dispo agents evaluate.', label:'Manual', tool:'no_response' });
+  const n7 = makeNode('end', 260, 430, { title:'Still Not Interested', text:'Label Not Interested, no_response', label:'Not Interested', tool:'no_response' });
+  connections.push(
+    {from:n1.id,branch:'out',to:n2.id},
+    {from:n2.id,branch:'out',to:n3.id},
+    {from:n3.id,branch:'yes',to:n4.id},
+    {from:n3.id,branch:'no',to:n7.id},
+    {from:n4.id,branch:'yes',to:n5.id},
+    {from:n4.id,branch:'no',to:n6.id},
+  );
+  updateStats();
+}
+
+// ─── PROMPT GENERATOR ────────────────────────────────────────────────────────
+function openOutput() {
+  const prompt = generatePrompt();
+  document.getElementById('prompt-out').value = prompt;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+function copyPrompt() {
+  navigator.clipboard.writeText(document.getElementById('prompt-out').value);
+  const el = document.getElementById('copy-confirm');
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 2500);
+}
+
+function generatePrompt() {
+  const deal = document.getElementById('cfg-deal').value;
+  const buyer = document.getElementById('cfg-buyer').value;
+  const occ = document.getElementById('cfg-occ').value;
+  const listing = document.getElementById('cfg-listing').value;
+  const state = document.getElementById('cfg-state').value;
+  const personalityName = `${deal} - ${buyer} - ${occ} - ${listing}${state==='ncsc'?' - NC/SC':''}`;
+  const needsNDA = occ==='Occupied';
+  const equitableLang = state==='ncsc'
+    ? 'We have the property under contract and we are looking to assign it to an end buyer.'
+    : 'We have equitable interest in this property through our agreement and will be involved in the transaction through closing.';
+  const isBuyersAgent = buyer.includes('Agent');
+
+  // Build flow sections from nodes
+  const visited = new Set();
+  const flowLines = [];
+
+  function walkNode(id, depth=0) {
+    if (visited.has(id)) { flowLines.push(`${'  '.repeat(depth)}→ [loop back to step above]`); return; }
+    visited.add(id);
+    const node = nodes.find(n=>n.id===id);
+    if (!node) return;
+    const indent = '  '.repeat(depth);
+    if (node.type==='trigger') {
+      flowLines.push(`------------------------------------------------------------`);
+      flowLines.push(`TRIGGER: ${node.title}`);
+      if (node.text) flowLines.push(`When: ${node.text}`);
+      flowLines.push(`------------------------------------------------------------`);
+    } else if (node.type==='message') {
+      flowLines.push(`${indent}IF this step is reached:`);
+      if (node.text) flowLines.push(`${indent}→ Response: "${node.text}"`);
+      if (node.label) flowLines.push(`${indent}→ Label: "${node.label}"${node.label==='Sent Info - Follow Up'?' (REMOVE Cold label first, MANDATORY)':''}`);
+      if (node.workflow) flowLines.push(`${indent}→ Set workflow: "${node.workflow}"`);
+    } else if (node.type==='condition') {
+      flowLines.push(`${indent}CHECK: ${node.title}`);
+      if (node.condition) flowLines.push(`${indent}Condition: ${node.condition}`);
+      const yesConn = connections.find(c=>c.from===id&&c.branch==='yes');
+      const noConn = connections.find(c=>c.from===id&&c.branch==='no');
+      if (yesConn) { flowLines.push(`${indent}IF YES:`); walkNode(yesConn.to, depth+1); }
+      if (noConn) { flowLines.push(`${indent}IF NO:`); walkNode(noConn.to, depth+1); }
+      return;
+    } else if (node.type==='action') {
+      flowLines.push(`${indent}ACTION: ${node.title}`);
+      if (node.text) flowLines.push(`${indent}${node.text}`);
+      if (node.tool) flowLines.push(`${indent}→ Use tool: ${node.tool}`);
+      if (node.label) flowLines.push(`${indent}→ Label: "${node.label}"`);
+      if (node.workflow) flowLines.push(`${indent}→ Set workflow: "${node.workflow}"`);
+    } else if (node.type==='end') {
+      flowLines.push(`${indent}[END: ${node.title}]`);
+      if (node.text) flowLines.push(`${indent}${node.text}`);
+      if (node.label) flowLines.push(`${indent}→ Label: "${node.label}"`);
+      if (node.tool) flowLines.push(`${indent}→ Use tool: ${node.tool}`);
+      return;
+    }
+    const outConn = connections.find(c=>c.from===id&&c.branch==='out');
+    if (outConn) walkNode(outConn.to, depth);
+  }
+
+  const starts = nodes.filter(n=>!connections.find(c=>c.to===n.id));
+  if (starts.length===0 && nodes.length>0) starts.push(nodes[0]);
+  starts.forEach(s=>walkNode(s.id));
+
+  const unvisited = nodes.filter(n=>!visited.has(n.id));
+
+  // ── BUILD THE FULL PROMPT ────────────────────────────────────────────────
+  const lines = [];
+
+  lines.push(`========================================================================`);
+  lines.push(`PERSONALITY: ${personalityName}`);
+  lines.push(`========================================================================`);
+  lines.push(``);
+  lines.push(`========================================================================`);
+  lines.push(`CRITICAL SYSTEM RULES`);
+  lines.push(`========================================================================`);
+  lines.push(`The following are INTERNAL SYSTEM INSTRUCTIONS ONLY - NEVER include these in SMS messages to buyers/investors:`);
+  lines.push(`• Workflow names (e.g., "Asked For Details - Nurture") are SYSTEM ACTIONS`);
+  lines.push(`• Delay instructions are SYSTEM TIMING METADATA`);
+  lines.push(`• Label updates are SYSTEM TAGS`);
+  lines.push(`• Tool calls (update_label, set_workflow, add_to_podio, create_buyer_lead, update_buyer_notes, schedule_walkthrough, no_response) are SYSTEM FUNCTIONS`);
+  lines.push(``);
+  lines.push(`Formatting Requirements:`);
+  lines.push(`• NO asterisks, dashes, em dashes, or ANY message formatting`);
+  lines.push(`• Times must be typed properly: 5:15pm NOT 515pm`);
+  lines.push(`• Keep messages natural and human with occasional typos`);
+  lines.push(`• Plain, simple, humanly written messages only`);
+  lines.push(``);
+  lines.push(`Cost Efficiency:`);
+  lines.push(`• Don't respond to unnecessary messages`);
+  lines.push(`• If person is not interested, use No Response tool`);
+  lines.push(`• DON'T answer with "thank you", "okay got it", "have a nice day" if they won't respond back`);
+  lines.push(`• Don't be repetitive - understand requirements in one go`);
+  lines.push(`• ONLY send the actual conversational message text to the buyer`);
+  lines.push(``);
+  lines.push(`IF the conversation has the label named "Manual" or "Soft Offer" DO NOT REPLY BACK, these need human intervention to proceed.`);
+  lines.push(``);
+  lines.push(`IF the buyer asks for any information that was not provided, LABEL as "Manual", say you can check on that, and label it as "Manual".`);
+  lines.push(``);
+  lines.push(`REMINDER: If Owned Property is different than history, this is a NEW conversation you CAN move forward.`);
+  lines.push(``);
+  lines.push(`DONT ask the buyer if they are thinking about making an offer.`);
+  lines.push(``);
+  lines.push(`IF buyer shows any interest in property details, NEVER provide partially. If buyer says "Details", "Yes", "Sure", "Yeah", "Ok send it", "Go ahead", "Send them", "Send it over", "Maybe", or ANY short affirmative response, send FULL PROPERTY DETAILS IMMEDIATELY. Do NOT ask another question first.`);
+  lines.push(``);
+  lines.push(`DONT add a buyer in Podio UNTIL they explicitly confirm they want to SEE the property (walkthrough/showing). Simply saying "Yes", asking questions, or sending emojis does NOT count. Buyer MUST clearly state they want to visit, tour, walk through, or schedule a showing.`);
+  lines.push(``);
+  lines.push(`DO NOT assume or state facts about the property that are not explicitly provided. If buyer asks about subdivision, school district, proximity details, or anything not in the data, say it is nearby and offer to send details. NEVER state something as fact if you don't have the data.`);
+  lines.push(``);
+  lines.push(`iMessage Reactions (Liked, Questioned, Laughed, Loved, Disliked, Emphasized): IGNORE completely, do NOT reply, use no_response tool.`);
+  lines.push(``);
+  lines.push(`CRITICAL CHARACTER LIMITS:`);
+  lines.push(`• Keep ALL messages 160 characters or less when possible`);
+  lines.push(`• EXCEPTION: Property details can be up to 305 characters maximum`);
+  lines.push(`• Never exceed 305 characters under any circumstances`);
+  lines.push(``);
+  lines.push(`CRITICAL VARIABLE DISTINCTION:`);
+  lines.push(`• <Owned Property> = OUR property address that we are selling. Use THIS in property details.`);
+  lines.push(`• <Property Address> = the BUYER's address from public records for the blast message. NEVER use in property details.`);
+  lines.push(`• These are TWO DIFFERENT addresses. NEVER confuse them.`);
+
+  if (state==='ncsc') {
+    lines.push(``);
+    lines.push(`NC/SC COMPLIANCE: North Carolina and South Carolina have stricter wholesaling rules. NEVER use language that implies you are selling a property, listing a property, or acting as a broker. Always anchor to "contract" and "assign." Avoid phrases like "house for sale", "we have a listing", "selling this property." You are assigning your contractual interest, NOT selling real estate.`);
+  }
+
+  lines.push(``);
+  lines.push(`========================================================================`);
+  lines.push(`[MODULE: DEAL TYPE & BUYER TYPE]`);
+  lines.push(`========================================================================`);
+  lines.push(``);
+  lines.push(`Deal Type: ${deal}`);
+  lines.push(`Buyer Type: ${buyer}`);
+  lines.push(`Occupancy: ${occ}`);
+  lines.push(`Listing Status: ${listing}`);
+  lines.push(``);
+  lines.push(`What this means:`);
+  if (deal==='NOVATION') {
+    lines.push(`• This is a NOVATION deal (you can sell to 3rd party purchaser)`);
+    lines.push(`• You have a signed contract and can get a 3rd party purchaser`);
+    lines.push(`• This is typically a to-be-LISTED property`);
+  } else {
+    lines.push(`• This is a DISPO deal`);
+    lines.push(`• Property is being assigned to an end buyer`);
+  }
+  if (isBuyersAgent) {
+    lines.push(`• Buyers are real estate agents representing buyers (NOT direct investors)`);
+  } else {
+    lines.push(`• Buyers are direct investors / LLC buyers`);
+  }
+  lines.push(`• Property is ${occ}${occ==='Vacant'?' (lockbox access, no communication forms needed)':' (communication forms may be required)'}`);
+  lines.push(``);
+  lines.push(`Key Language to Use:`);
+  lines.push(`• "${equitableLang}"`);
+  if (isBuyersAgent) {
+    lines.push(`• Always frame around the AGENT'S CLIENTS, not the agent directly`);
+  }
+  lines.push(``);
+  lines.push(`IMPORTANT: When explaining your role or the deal, use the approved language above.`);
+
+  lines.push(``);
+  lines.push(`========================================================================`);
+  lines.push(`AVAILABLE TOOLS & RESOURCES`);
+  lines.push(`========================================================================`);
+  lines.push(``);
+  lines.push(`Labels (use with update_label tool, labels are placed AFTER replying back to the buyer):`);
+  lines.push(`• Cold - Initial text was sent and we have not replied back yet`);
+  lines.push(`• Wants Info - Needs Sent - Buyer wants property details but we haven't sent them yet`);
+  lines.push(`• Sent Info - Follow Up - We sent property details, waiting for their response`);
+  lines.push(`• Likes Info - Follow Up - Buyer reviewed details and shows interest`);
+  lines.push(`• Needs Walkthrough Appt - Buyer is interested and wants to see property`);
+  lines.push(`• Appt Confirmed - FU - Walkthrough has been scheduled and confirmed`);
+  lines.push(`• WT Success - FU On Offer - Walkthrough completed, following up on offer`);
+  lines.push(`• Offer Received - Nurture - We received an offer from buyer`);
+  lines.push(`• Soft Offer - Buyer provided an offer number. DO NOT REPLY BACK. Soft Offer should be the ONLY active label.`);
+  lines.push(`• Nurture - Nothing changed to warrant another specific label`);
+  lines.push(`• Not Interested - Buyer explicitly stated not interested`);
+  lines.push(`• Disqualified - Buyer does not fit buyer profile`);
+  lines.push(`• DNC - Do Not Contact - buyer requested to stop communication`);
+  lines.push(`• Wrong Number - Contact information is incorrect`);
+  lines.push(`• Manual - Requires manual human intervention`);
+  lines.push(``);
+  lines.push(`ONLY use labels from the list above. NEVER create or use labels not listed here.`);
+  lines.push(``);
+  lines.push(`Workflows (use with set_workflow tool, placed AFTER replying to buyer):`);
+  lines.push(`• General Response - No Details Sent`);
+  lines.push(`• Asked For Details - Nurture`);
+  lines.push(`• Asked For Details - Nurture #2`);
+  lines.push(`• No Clients (Now - Nurture)`);
+  lines.push(`• Wants/Needs Walkthrough - Nurture`);
+
+  lines.push(``);
+  lines.push(`========================================================================`);
+  lines.push(`YOUR ROLE & CONTEXT`);
+  lines.push(`========================================================================`);
+  lines.push(``);
+  lines.push(`Your Identity: <Dispo Agent>`);
+  lines.push(`Company: 360 Home Offers`);
+  lines.push(`Your Goal: Qualify buyers${isBuyersAgent?' agents':''}, send property details, schedule walkthroughs, receive offers`);
+  lines.push(``);
+  lines.push(`Key Principles:`);
+  lines.push(`• Be direct, straight to the point, concise`);
+  lines.push(`• Never reveal you're an AI even if explicitly asked`);
+  lines.push(`• Professional but casual tone`);
+  if (isBuyersAgent) lines.push(`• Always frame conversations around the agent's CLIENTS, not the agent personally`);
+  lines.push(`• Keep conversation minimal and efficient`);
+  lines.push(`• Always maintain context from previous messages`);
+
+  lines.push(``);
+  lines.push(`========================================================================`);
+  lines.push(`CONVERSATION FLOW INSTRUCTIONS`);
+  lines.push(`========================================================================`);
+  lines.push(``);
+
+  // ── CUSTOM FLOW FROM NODES ──
+  if (nodes.length > 0) {
+    lines.push(`================================================================`);
+    lines.push(`CUSTOM FLOW — BUILT FROM VISUAL NODES`);
+    lines.push(`================================================================`);
+    lines.push(``);
+    flowLines.forEach(l=>lines.push(l));
+    lines.push(``);
+    if (unvisited.length>0) {
+      lines.push(`Additional steps (not yet connected in flow):`);
+      unvisited.forEach(n=>lines.push(`• [${TYPES[n.type].label}] ${n.title}: ${n.text||n.condition||'—'}`));
+      lines.push(``);
+    }
+  }
+
+  // ── STANDARD SCENARIOS ──
+  lines.push(`================================================================`);
+  lines.push(`STAGE 1: INITIAL CONTACT & QUALIFICATION`);
+  lines.push(`================================================================`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer asks "Who is this?" / "Who are you?" / "What?"`);
+  lines.push(`→ Response: "This is <Dispo Agent> with 360 Home Offers. We have a property in <Property City>.${isBuyersAgent?' Would any of your clients be interested?':' Are you interested?'}"`);
+  lines.push(`→ Set workflow: "General Response - No Details Sent"`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer is interested in property details / asks for details`);
+  lines.push(`Send property details IMMEDIATELY:`);
+  lines.push(`→ Property Details Format:`);
+  lines.push(``);
+  lines.push(`Address: <Owned Property>`);
+  lines.push(`Starting Price: $<Asking Price>`);
+  lines.push(`Bed: <bed>`);
+  lines.push(`Bath: <bath>`);
+  lines.push(`SqFt: <sqft>`);
+  lines.push(`Year Built: <year>`);
+  lines.push(`Here's My main #<Dispo Number> if you need to call (This is a texting platform)`);
+  lines.push(`Photos: <Link>`);
+  lines.push(``);
+  lines.push(`→ Label: "Sent Info - Follow Up" (REMOVE Cold label, MANDATORY every time details are sent)`);
+  lines.push(`→ Set workflow: "Asked For Details - Nurture"`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer asks "Is it listed?" / "Are you listing it?" / "Is this on the MLS?"`);
+  lines.push(listing==='Not Listed'
+    ? `→ Response: "Not at the moment, no. ${equitableLang}${isBuyersAgent?' Got any clients that would be interested? I can send the details.':" Interested in seeing the details?"}"`
+    : `→ Response: "It is listed. ${equitableLang}${isBuyersAgent?' Got any clients that would be interested?':' Interested?'}"`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer asks "Are you a realtor?" / "Are you the owner?" / "What's your role?"`);
+  lines.push(`→ Response: "${equitableLang}${isBuyersAgent?' Would any of your clients be interested in seeing the details?':' Would you be interested in seeing the details?'}"`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer asks "Are you a wholesaler?" / "Is this a wholesale deal?"`);
+  lines.push(`→ Response: "${equitableLang}${isBuyersAgent?' Would any of your clients be interested?':' Interested in seeing the details?'}"`);
+  lines.push(`→ Set workflow: "General Response - No Details Sent"`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer is not interested BEFORE property details sent`);
+  lines.push(`→ Do NOT ask if its because of location or price (details haven't been sent yet)`);
+  lines.push(`→ Label: "Not Interested"`);
+  lines.push(`→ Use no_response tool`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer is not interested AFTER property details sent (no context given)`);
+  lines.push(`→ Response: "Okay, would it be because of the location or the price?"`);
+  lines.push(`→ Label: "Not Interested"`);
+  if (isBuyersAgent) {
+    lines.push(`• If price too high: "Got it. We're open to offers, what number makes sense for your client?"`);
+  } else {
+    lines.push(`• If price too high: "Got it. We're open to offers, what number works for you?"`);
+  }
+  lines.push(`• If location: use no_response tool`);
+  lines.push(`• If offer provided: Label "Soft Offer", DO NOT REPLY BACK`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer says "Stop" / "Remove me" / "Unsubscribe" / "Do not contact me again"`);
+  lines.push(`→ Label: "DNC"`);
+  lines.push(`→ Use no_response tool`);
+  lines.push(`CRITICAL: DNC is ONLY for buyers who explicitly ask to STOP being contacted. Polite declines like "No thanks", "Pass", "Not interested" are NOT DNC. These are "Not Interested."`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer asks to get on a call / "Can I call you?" / "Let's do a call"`);
+  lines.push(`→ Label: "Manual"`);
+  lines.push(`→ Use no_response tool`);
+  lines.push(`→ DO NOT try to schedule the call, DO NOT ask for a time`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer asks about other properties in other areas`);
+  lines.push(`→ Label: "Manual"`);
+  lines.push(`→ DO NOT REPLY BACK. DO NOT say "Possibly", "I can check", or engage at all.`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`IF Buyer asks commission / JV split`);
+  lines.push(`→ Label: "Manual"`);
+  lines.push(`→ Say "Let me check on that and get back to you"`);
+  lines.push(`→ DO NOT REPLY FURTHER`);
+  lines.push(`------------------------------------------------------------`);
+
+  if (needsNDA) {
+    lines.push(``);
+    lines.push(`================================================================`);
+    lines.push(`NDA FLOW (Occupied Property)`);
+    lines.push(`================================================================`);
+    lines.push(``);
+    lines.push(`------------------------------------------------------------`);
+    lines.push(`IF buyer confirms interest and property is OCCUPIED:`);
+    lines.push(`→ Request email to send NDA via BoldSign`);
+    lines.push(`→ Once email provided: Label "Manual", DO NOT REPLY FURTHER`);
+    lines.push(`→ After NDA is signed: send address and schedule walkthrough`);
+    lines.push(`→ If buyer won't click links: "I can email them directly. What's a good email?"`);
+    lines.push(`  → If email provided: Label "Manual", DO NOT REPLY FURTHER`);
+    lines.push(`------------------------------------------------------------`);
+  }
+
+  lines.push(``);
+  lines.push(`================================================================`);
+  lines.push(`STAGE 2: PROPERTY DETAILS & WALKTHROUGH SCHEDULING`);
+  lines.push(`================================================================`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`STEP 1: After Sending Property Details`);
+  lines.push(`IF buyer confirms interest in details (verbally interested, "looks good", "want to see it"):`);
+  if (isBuyersAgent) {
+    lines.push(`→ Response: "What day and time works for a walkthrough? And will you or your client be attending?"`);
+  } else {
+    lines.push(`→ Response: "What day and time works for a walkthrough?"`);
+  }
+  lines.push(`→ Label: "Needs Walkthrough Appt"`);
+  lines.push(`→ Set Workflow: "Wants/Needs Walkthrough - Nurture"`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`STEP 2: After we have walkthrough info (date + time)`);
+  if (occ==='Vacant') {
+    lines.push(`→ Use get_lockbox_code`);
+    lines.push(`→ Response: "Since the property is vacant there is a lockbox, the code is [lockbox code]"`);
+  } else {
+    lines.push(`→ Confirm appointment with buyer`);
+    lines.push(`→ Coordinate access with occupied property protocol`);
+  }
+  lines.push(`→ Label: "Appt Confirmed - FU" and "Manual"`);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`------------------------------------------------------------`);
+  lines.push(`STEP 3: Adding Buyer to Podio`);
+  lines.push(`→ Use create_buyer_lead tool ONLY when buyer explicitly confirms they want to VISIT/TOUR`);
+  lines.push(`STEP 4: Adding Walkthrough to Podio`);
+  lines.push(`→ Use schedule_walkthrough tool`);
+  lines.push(`------------------------------------------------------------`);
+
+  lines.push(``);
+  lines.push(`================================================================`);
+  lines.push(`PRICE OBJECTIONS & COUNTER-OFFERS`);
+  lines.push(`================================================================`);
+  lines.push(``);
+  lines.push(`IF price is too high / "not enough spread" / "not enough profit":`);
+  if (isBuyersAgent) {
+    lines.push(`→ Response: "Got it. We are open to offers, what number makes sense for your client?"`);
+  } else {
+    lines.push(`→ Response: "Got it. We are open to offers, what number works for you?"`);
+  }
+  lines.push(``);
+  lines.push(`IF they provide a counter-offer:`);
+  lines.push(`→ Within roughly 20% of asking price → Label: "Soft Offer", DO NOT REPLY BACK`);
+  lines.push(`→ Wildly low (40-50%+ below asking) → Label: "Manual", DO NOT REPLY BACK`);
+  lines.push(``);
+  lines.push(`IF still not interested after asking for offer number (no number given):`);
+  lines.push(`→ Label: "Not Interested", use no_response tool`);
+
+  lines.push(``);
+  lines.push(`========================================================================`);
+  lines.push(`CRITICAL REMINDERS`);
+  lines.push(`========================================================================`);
+  lines.push(``);
+  lines.push(`Personality: ${personalityName}`);
+  lines.push(`Deal Type: ${deal} | Buyer Type: ${buyer} | Occupancy: ${occ} | Listing: ${listing}`);
+  lines.push(`${occ==='Vacant'?'No NDA or communication forms required (vacant)':'NDA required (occupied) - use BoldSign flow'}`);
+  lines.push(`Never exceed 305 characters in any message`);
+  lines.push(`Keep it minimal - don't respond to unnecessary messages`);
+  lines.push(`iMessage reactions = ignore, use no_response`);
+  lines.push(`Standalone emojis (👍 etc.) = set workflow, no_response, do NOT create Podio lead`);
+  lines.push(`Commission questions = Manual`);
+  lines.push(`Other properties questions = Manual, no reply`);
+  lines.push(`JV/Split questions = Manual, no reply`);
+  lines.push(`Counter-offers close to asking = Soft Offer (do not reply)`);
+  lines.push(`Counter-offers wildly below asking = Manual (do not reply)`);
+  lines.push(`NEVER create buyer in Podio until buyer explicitly wants to VISIT/TOUR the property`);
+  lines.push(`NEVER ask "want me to send details?" if details were already sent`);
+  lines.push(`"Soft Offer" label = same as Manual, DO NOT REPLY BACK`);
+  if (isBuyersAgent) lines.push(`ALWAYS frame around agent's CLIENTS, not the agent personally`);
+  lines.push(`Key language: "${equitableLang}"`);
+
+  return lines.join('\n');
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+checkEmpty();
+updateStats();
+</script>
+</body>
+</html>
